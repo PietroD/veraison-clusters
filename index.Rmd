@@ -1,0 +1,229 @@
+---
+title: "Veraison Clusters"
+author: "Pietro Delfino"
+date: "19 dicembre 2017"
+output: html_document
+highlight: pygments
+---
+
+```{r setup, include=F, warning=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(knitr)
+library(DT)
+library(dplyr)
+library(readxl)
+```
+
+## How I created the new Annotation Families Integrated (AFI) table
+I downloaded from the Biomercator output the QTLs and meta-QTLs intervals in base pairs
+<br>
+I used the command *bedextraxt* from *bedops* to extract the genes in the QTLs and meta-QTLs intervals
+<br>
+The .bed reference file of the grapevine genome used to extract the genes is the V1 annotation mapped on the 12X.2 structural annotation downloaded from https://urgi.versailles.inra.fr/Species/Vitis/Genome-Browser . I downloaded each chromosome gff file and pasted into unique file and modified to format it like .bed file
+<br>
+Then I executed the following commands to sort bed files and extract genes in the intervals
+```{r, engine = 'bash', eval = FALSE}
+for d in ./*/ ; do (cd "$d" && sed -i 's/^\<[0-9]*\>/chr&/g'  *_metaqtls ); done
+
+for d in ./*/ ; do (cd "$d" && for f in *_metaqtls; do ~/PROGRAMS/bedops/bin/sort-bed $f > $f.sorted; done ); done
+
+for d in ./*/ ; do (cd "$d" && split -l 1 *.sorted --additional-suffix=.ok ); done
+
+for d in ./*/ ; do (cd "$d" && mkdir ready_for_bedextract ); done
+
+for d in ./*/ ; do (cd "$d" && mv *.ok ready_for_bedextract ); done
+
+for d in ./*/ ; do (cd "$d/ready_for_bedextract/" && for f in *.ok; do  mv $f `cut -f 4 $f` ; done ); done
+
+for d in ./*/ ; do (cd "$d/ready_for_bedextract/" && for f in *; do  ~/PROGRAMS/bedops/bin/bedextract ../../../copy/V2.1_ok.bed $f > $f.bed ; done ); done
+```
+
+Then I loaded in R all the list of genes comprised in the meta-QTLs intervals
+
+```{r, include=TRUE, warning=F}
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/mqtl_and_qtl_genes_bedops/metaqtl/")
+filenames <- list.files(path = ".", pattern = ".bed")
+kable(filenames, align="l")
+all_metaqtl <-  lapply(filenames, read.table, header = F, sep="\t", col.names = c("metaQTL","chr","start","end","gene")) ## load all the file in one command
+names(all_metaqtl) <- filenames
+names(all_metaqtl) <- gsub(pattern=".bed", replacement="", x=names(all_metaqtl)) ## remove .bed suffix
+all_mqtl_merge <- Reduce(function(...) merge(...,by=c("gene","chr","start","end"),  all=T), all_metaqtl) ## merge the list of file in one big dataframe
+colnames(all_mqtl_merge) <- c("gene","chr","start","end", names(all_metaqtl))
+kable(all_mqtl_merge[1:6,1:18], align="l")
+```
+
+The QTL genes loaded were only the ones from QTLs related to phenology, identified from the pattern option in list.files command
+
+```{r, include=TRUE, warning=F}
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/mqtl_and_qtl_genes_bedops/qtl/V1_on_12x.2")
+filenames <- list.files(path = ".", pattern = ("VT|F-V|VB|VE|Vr|VP|V-R|Vr-Rp|F-R"))
+kable(length(filenames), align="l")
+all_qtl <-  lapply(filenames, read.table, header = F, sep="\t", col.names = c("QTL","chr","start","end","gene"))
+names(all_qtl) <- filenames
+names(all_qtl) <- gsub(pattern=".bed", replacement="", x=names(all_qtl)) ## remove .bed suffix
+all_qtl_merge <- Reduce(function(...) merge(...,by=c("gene","chr","start","end"),  all=T), all_qtl)
+colnames(all_qtl_merge) <- c("gene","chr","start","end", names(all_qtl))
+kable(all_qtl_merge[1:6,1:18], align="l")
+```
+
+Now I load the original AFI file as received from Sara
+
+```{r, include=TRUE, warning=F}
+## merge qtls and metaqtls (this command I cannot do it on the laptop, too memory consuming)
+# all_qtls_metaqtls_V1_on_12x.2 <- merge(all_qtl_merge, all_mqtl_merge, all=T)
+## I load the file elaborated on the server
+# write.table(all_qtls_metaqtls_V1_on_12x.2, file="../all_qtls_metaqtls_V1_on_12x.2.txt", row.names=F, quote=F, sep="\t", dec=".")
+all_qtls_metaqtls_V1_on_12x.2 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/all_qtls_metaqtls_V1_on_12x.2.txt", header=T)
+afi_original <- read_excel("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/OLD-FILES/nuovi_database/Annotation_Families_Integrated_2016.xlsx", sheet= "Annotation_Families_Integrated")
+kable(head(afi_original), align="l")
+## remove useless information
+afi_original_reduced <- afi_original[,c(2,13)]
+afi_original_reduced <- dplyr::filter(afi_original_reduced, grepl("VIT",  `Unique ID`)) ## some filtering
+## merge qtls and metaqtls with afi (this commands I cannot do it on the laptop, too memory consuming)
+# all_qtls_metaqtls_V1_on_12x.2_with_annotation <- merge(all_qtls_metaqtls_V1_on_12x.2, afi_original_reduced, by.x = "gene", by.y="Unique ID", all=T)
+# all_qtls_metaqtls_V1_on_12x.2_with_annotation <- merge(all_qtls_metaqtls_V1_on_12x.2, afi_original_reduced, all=T)
+# kable(head(all_qtls_metaqtls_V1_on_12x.2_with_annotation), align="l")
+
+# from here on I performed different merge to attach the new transcriptomic datasets to the afi file, until i get this big file with all the necessary information
+new_afi_definitive <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/all_qtls_metaqtls_V1_on_12x.2_with_annotation.txt", header=T, fill=T)
+dim(new_afi_definitive)
+```
+
+The table is available at https://pietrod.shinyapps.io/Annotation_Families_Integrated/ 
+
+## Molecular Veraison
+
+I received 6 different datasets of Pinot Noir and Cabernet Sauvignon cultivars RNA-Seq FPKM data for 3 different years of berries samples around veraison time
+<br>
+I load the original dataset to perform filtering and cleaning. We need to identify the *molecular veraison* for the different years and cultivars in order to align the datasets and perform clustering
+
+```{r, include=TRUE, warning=F}
+pn.12 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN12_FPKM_table.txt", header=T, row.names=1)
+pn.13 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN13_FPKM_table.tsv", header=T, row.names=1)
+pn.14 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN14_FPKM_table.tab", header=T, row.names=1)
+cs.12 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/CS12_FPKM_table.txt", header=T, row.names=1)
+cs.13 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/CS13_FPKM_table.tsv", header=T, row.names=1)
+cs.14 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/CS14_FPKM_table.tab", header=T, row.names=1)
+dim(pn.12)
+length(names(pn.12))
+dim(pn.13)
+length(names(pn.13))
+dim(pn.14)
+length(names(pn.14))
+dim(cs.12)
+length(names(cs.12))
+dim(cs.13)
+length(names(cs.13))
+dim(cs.14)
+length(names(cs.14))
+kable(pn.12[1:6,1:18],align="l")
+```
+
+The idea is to calculate the number of genes, in particular the *marker transitions* **early up**, that show a value of log2FC greater than 1.5 in the intervals around veraison, in order to identify what time interval shows the highest number of mt genes moving and displaying significant increase in the expression level, to be able to say when is molecular veraison occurring
+<br>
+I wrote an R function that starting from the raw datasets of FPKM perform filtering and cleaning according to Sara suggestions and then calculate the fold change of the mt genes between each pair of time point from T0 to T5 and return the number of genes with a log2FC higher than 1.5
+<br>
+The function works like this:
+
+1. load a raw dataset and identify the total number of columns (conditions + replicates)
+2. it creates a vector representing the number of columns to add to the dataset that will be filled with NA or keep according to the condition evaluated
+3. the number of column to add is equal to the total number of columns + 1 and the total number of columns + total number of columns divided by 3 (if the number of replicates is 3)
+4. the idea is to evaluate separately every sample and in the corresponding added column for the sample set NA if the FPKM value is less than 1 in at least 2 replicates
+5. the set of new columns is then evaluated by row and if all the columns of a row show NA, the entire row is removed
+6. the mean values of the remaining rows calculated by sample (3 replicates) is then obtained and a new dataframe is created with only the mean values
+7. this dataframe is subsetted based on the *early up* mt genes
+8. the fold change (FC) is calculated for every gene between a time point and the one before (T1/T0)
+9. log2 of the FC is applied and the number of genes showing FC > 1.5 is returned
+
+```{r, include=TRUE, warning=F, eval=F}
+analyze.3 <- function(filename) {
+	dat <- read.table(file = paste0("../../../nuovi_dataset/",filename), header=T, row.names=1)
+	clmn.n <- length(names(dat))
+	col.to.add <- (length(names(dat)) + 1) : ((length(names(dat)) + (length(names(dat))/3)))
+	dat[, col.to.add] <- (ifelse(sapply(seq(1,length(names(dat)),by=3),function(i) rowSums(dat[,i:(i+2)] < 1, na.rm=T) > 1),NA,"keep"))
+	dat.1 <- dat[rowSums(is.na(dat[,col.to.add]))!=ncol(dat[,col.to.add]), ]
+	dat.1 <- dat.1[,1:clmn.n]
+	colnames(dat.1) <- paste0(rep("t", length(names(dat.1))), rep(0:((length(names(dat.1))/3)-1),each=3))
+	# number of columns per group (1-3, 4-6)
+	n <- 3
+	# number of groups
+	n_grp <- ncol(dat.1) / n
+	# column indices (one vector per group)
+	idx_grp <- split(seq(dat.1), rep(seq(n_grp), each = n))
+	# calculate the row means for all groups
+		res <- lapply(idx_grp, function(i) {
+		# subset of the data frame
+		tmp <- dat.1[i]
+		# calculate row means
+		rowMeans(tmp, na.rm = TRUE)
+	})
+	# transform list into a data frame
+	dat2 <- as.data.frame(res)
+	# extract names of first column of each group
+	names_frst <- names(dat.1)[sapply(idx_grp, "[", 1)]
+	# modify column names of new data frame
+	names(dat2) <- names_frst
+	library(readxl)
+	m.t.all <- read_excel("../../../geni_marcatori_transizioni_copy.xlsx", sheet="all")
+	early_up <- m.t.all[m.t.all$marker_transitions == "early_up",]
+	dat2_early_up <- dat2[rownames(dat2) %in% early_up$ID,]
+
+	dat2_early_up <- as.data.frame(dat2_early_up)
+
+	dat2_early_up$FC0_1 <- dat2_early_up$t1 / dat2_early_up$t0
+	dat2_early_up$FC1_2 <- dat2_early_up$t2 / dat2_early_up$t1
+	dat2_early_up$FC2_3 <- dat2_early_up$t3 / dat2_early_up$t2
+	dat2_early_up$FC3_4 <- dat2_early_up$t4 / dat2_early_up$t3
+	dat2_early_up$FC4_5 <- dat2_early_up$t5 / dat2_early_up$t4
+
+	dat2_early_up_FC <- log2(dat2_early_up[,n_grp:(n_grp+5)])
+
+	print(dat2_early_up[1:6,1:6])
+	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC0_1 > 1.5 , ]))
+	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC1_2 > 1.5 , ]))
+	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC2_3 > 1.5 , ]))
+	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC3_4 > 1.5 , ]))
+	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC4_5 > 1.5 , ]))
+}
+```
+Example of the function
+
+```{r, include=TRUE, warning=F}
+# load the function
+source("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/analyze3.r")
+pn12.molecular.veraison <- analyze3("PN12_FPKM_table.txt")
+```
+
+In this example (Pinot 2012) the molecular veraison is considered between T2 and T3 - 127 genes (do not consider the second number, it is just the number of columns of the dataset returned as result). The table displayed before the numbers is a snapshot of the original dataset cleaned and where the values of the replicates have been averaged
+ 
+## Clusters
+
+To perform clustering I used the software called **Clust**, available at https://github.com/BaselAbujamous/clust . It is a pyhton program which takes as input the raw datasets and perform filtering, normalization, centering and clustering. It can handle n amount of datasets with different time points or conditions
+<br>
+We ran **Clust** both on single datasets keeping all the time points, both on multiple datasets together after sincronizing the time points around the molecular veraison identified previously (and then reducing the number of time points)
+<br>
+The clustering process was run not on the entire dataset but only on the genes in the QTLs intervals, that I extracted from the new AFI file
+
+```{r, include=TRUE, warning=F}
+pn.12.qtl.genes <- pn.12[rownames(pn.12) %in% all_qtl_merge$gene, ]
+kable(pn.12.qtl.genes[1:6,1:18], align="l")
+dim(pn.12.qtl.genes)
+```
+
+The number of genes in all the QTLs intervals is 8091. The same subsetting has been applied to all 6 datasets
+<br>
+**Clust** was then ran with the same following commands. Before on single datasets without correction around molecular veraison
+
+```{r, engine = 'bash', eval = FALSE}
+clust Data-pn_2012/ -n normalization-pn_2012.txt -r replicates_file-pn_2012.txt -fil-v 1.1 -fil-c 1 -fil-d 1 -np 18
+```
+
+And after correction when running on multiple datasets together, for example on the three years of Pinot together
+
+```{r, engine = 'bash', eval = FALSE}
+clust Data-all-pn/ -n normalization-all-pn.txt -r replicates_file-all-pn.txt -fil-v 1.1 -fil-c 1 -fil-d 3 -np 18
+```
+
+
+
