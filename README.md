@@ -1,2 +1,2 @@
-# veraison-clusters
+# Veraison RNA-Seq profile clusters
 Gene expression profile clustering of RNA-Seq data for grapevine veraison time
