@@ -9,10 +9,14 @@ highlight: pygments
 ```{r setup, include=F, warning=F}
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
+library(reshape2)
 library(knitr)
 library(DT)
 library(dplyr)
 library(readxl)
+library(gplots)
+library(biomaRt)
+library(forcats)
 ```
 
 ## How I created the new Annotation Families Integrated (AFI) table
@@ -42,6 +46,7 @@ for d in ./*/ ; do (cd "$d/ready_for_bedextract/" && for f in *; do  ~/PROGRAMS/
 Then I loaded in R all the list of genes comprised in the meta-QTLs intervals
 
 ```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
 setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/mqtl_and_qtl_genes_bedops/metaqtl/")
 filenames <- list.files(path = ".", pattern = ".bed")
 kable(filenames, align="l")
@@ -56,6 +61,7 @@ kable(all_mqtl_merge[1:6,1:18], align="l")
 The QTL genes loaded were only the ones from QTLs related to phenology, identified from the pattern option in list.files command
 
 ```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
 setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/mqtl_and_qtl_genes_bedops/qtl/V1_on_12x.2")
 filenames <- list.files(path = ".", pattern = ("VT|F-V|VB|VE|Vr|VP|V-R|Vr-Rp|F-R"))
 kable(length(filenames), align="l")
@@ -70,6 +76,7 @@ kable(all_qtl_merge[1:6,1:18], align="l")
 Now I load the original AFI file as received from Sara
 
 ```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
 ## merge qtls and metaqtls (this command I cannot do it on the laptop, too memory consuming)
 # all_qtls_metaqtls_V1_on_12x.2 <- merge(all_qtl_merge, all_mqtl_merge, all=T)
 ## I load the file elaborated on the server
@@ -86,7 +93,7 @@ afi_original_reduced <- dplyr::filter(afi_original_reduced, grepl("VIT",  `Uniqu
 # kable(head(all_qtls_metaqtls_V1_on_12x.2_with_annotation), align="l")
 
 # from here on I performed different merge to attach the new transcriptomic datasets to the afi file, until i get this big file with all the necessary information
-new_afi_definitive <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/all_qtls_metaqtls_V1_on_12x.2_with_annotation.txt", header=T, fill=T)
+new_afi_definitive <- read_excel("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/all_qtls_metaqtls_V1_on_12x.2_with_annotation.xlsx")
 dim(new_afi_definitive)
 ```
 
@@ -99,6 +106,7 @@ I received 6 different datasets of Pinot Noir and Cabernet Sauvignon cultivars R
 I load the original dataset to perform filtering and cleaning. We need to identify the *molecular veraison* for the different years and cultivars in order to align the datasets and perform clustering
 
 ```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
 pn.12 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN12_FPKM_table.txt", header=T, row.names=1)
 pn.13 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN13_FPKM_table.tsv", header=T, row.names=1)
 pn.14 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/PN14_FPKM_table.tab", header=T, row.names=1)
@@ -106,17 +114,11 @@ cs.12 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/
 cs.13 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/CS13_FPKM_table.tsv", header=T, row.names=1)
 cs.14 <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/CS14_FPKM_table.tab", header=T, row.names=1)
 dim(pn.12)
-length(names(pn.12))
 dim(pn.13)
-length(names(pn.13))
 dim(pn.14)
-length(names(pn.14))
 dim(cs.12)
-length(names(cs.12))
 dim(cs.13)
-length(names(cs.13))
 dim(cs.14)
-length(names(cs.14))
 kable(pn.12[1:6,1:18],align="l")
 ```
 
@@ -137,7 +139,7 @@ The function works like this:
 9. log2 of the FC is applied and the number of genes showing FC > 1.5 is returned
 
 ```{r, include=TRUE, warning=F, eval=F}
-analyze.3 <- function(filename) {
+molecular_veraison_windows <- function(filename) {
 	dat <- read.table(file = paste0("../../../nuovi_dataset/",filename), header=T, row.names=1)
 	clmn.n <- length(names(dat))
 	col.to.add <- (length(names(dat)) + 1) : ((length(names(dat)) + (length(names(dat))/3)))
@@ -179,7 +181,6 @@ analyze.3 <- function(filename) {
 
 	dat2_early_up_FC <- log2(dat2_early_up[,n_grp:(n_grp+5)])
 
-	print(dat2_early_up[1:6,1:6])
 	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC0_1 > 1.5 , ]))
 	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC1_2 > 1.5 , ]))
 	print(dim(dat2_early_up_FC[dat2_early_up_FC$FC2_3 > 1.5 , ]))
@@ -191,21 +192,30 @@ Example of the function
 
 ```{r, include=TRUE, warning=F}
 # load the function
-source("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/analyze3.r")
-pn12.molecular.veraison <- analyze3("PN12_FPKM_table.txt")
+source("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/molecular_veraison_windows.r")
+molecular_veraison_windows("PN12_FPKM_table.txt")
 ```
 
 In this example (Pinot 2012) the molecular veraison is considered between T2 and T3 - 127 genes (do not consider the second number, it is just the number of columns of the dataset returned as result). The table displayed before the numbers is a snapshot of the original dataset cleaned and where the values of the replicates have been averaged
- 
+<br>
+**Results for both cultivars and all years**
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+all.results <- read_excel("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/molecular_veraison-db.xlsx", sheet="all_for_R")
+kable(all.results, align="l")
+```
+
 ## Clusters
 
 To perform clustering I used the software called **Clust**, available at https://github.com/BaselAbujamous/clust . It is a pyhton program which takes as input the raw datasets and perform filtering, normalization, centering and clustering. It can handle n amount of datasets with different time points or conditions
 <br>
-We ran **Clust** both on single datasets keeping all the time points, both on multiple datasets together after sincronizing the time points around the molecular veraison identified previously (and then reducing the number of time points)
+We ran **Clust** both on single datasets keeping all the time points, and on multiple datasets together after sincronizing the time points around the molecular veraison identified previously (and then reducing the number of time points)
 <br>
 The clustering process was run not on the entire dataset but only on the genes in the QTLs intervals, that I extracted from the new AFI file
 
 ```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
 pn.12.qtl.genes <- pn.12[rownames(pn.12) %in% all_qtl_merge$gene, ]
 kable(pn.12.qtl.genes[1:6,1:18], align="l")
 dim(pn.12.qtl.genes)
@@ -224,6 +234,195 @@ And after correction when running on multiple datasets together, for example on 
 ```{r, engine = 'bash', eval = FALSE}
 clust Data-all-pn/ -n normalization-all-pn.txt -r replicates_file-all-pn.txt -fil-v 1.1 -fil-c 1 -fil-d 3 -np 18
 ```
+
+Clustering results
+<br>
+The following table summarizes the results obtained for the clustering before and after centering around molecular veraison
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+clust.results.before <- read_excel("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/clust_results_summary.xlsx", sheet="before")
+kable(clust.results.before, align="l")
+clust.results.after <- read_excel("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/clust_results_summary.xlsx", sheet="after")
+kable(clust.results.after, align="l")
+```
+
+Some example plots from the clustering results of **Clust**
+<br>
+Before I load the genes (VIT) placed in the clusters for each separate datasets
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/Before-correction/Results_28_Nov_17/")
+filenames <- list.files(path = ".",pattern=("ts.tsv"), recursive=T)
+all_clust <-  lapply(filenames, read.table, head=T, sep="\t", na.strings="")
+names(all_clust) <- filenames
+names(all_clust) <- gsub(pattern="Results_28_Nov_17_", replacement="", x=names(all_clust))
+names(all_clust) <- gsub(pattern="/Clusters_Objects.tsv", replacement="", x=names(all_clust))
+## rimuovo la seconda riga (quella con scritto Genes) da tutti i df ##
+all_clust <- lapply(all_clust, function(x) x[2:nrow(x),])
+dim(all_clust)
+```
+
+Then I load all the data processed by **Clust** that the program used to plot the results (cleaned, filtered, centered, normalized) 
+<br>
+**To correct**
+
+## Heatmaps of Pinot up-regulated genes around veraison 
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/Before-correction/Results_28_Nov_17/")
+cl.pn12 <- read.table("Results_28_Nov_17_PN-2012/Clusters_Objects.tsv", head=T, sep="\t", na.strings="")
+cl.pn12 <- cl.pn12[2:nrow(cl.pn12),]
+dim(cl.pn12)
+cl.pn12.up <- cl.pn12[,c(3,4)]
+head(cl.pn12.up)
+cl.pn13 <- read.table("Results_28_Nov_17_PN-2013/Clusters_Objects.tsv", head=T, sep="\t", na.strings="")
+cl.pn13 <- cl.pn13[2:nrow(cl.pn13),]
+dim(cl.pn13)
+cl.pn13.up <- cl.pn13[,c(6:9)]
+head(cl.pn13.up)
+cl.pn14 <- read.table("Results_28_Nov_17_PN-2014/Clusters_Objects.tsv", head=T, sep="\t", na.strings="")
+cl.pn14 <- cl.pn14[2:nrow(cl.pn14),]
+dim(cl.pn14)
+cl.pn14.up <- cl.pn14[,c(8:11)]
+head(cl.pn14.up)
+```
+
+Which and how many up-regulated genes are in common between all the 3 years in Pinot clusters as obtained by **Clust** on each separate datasets?
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+## I already know that these are 13 =) 
+thirteen <- sort(intersect(intersect(unique(as.vector(as.matrix(cl.pn12.up[,c(1:2)]))), unique(as.vector(as.matrix(cl.pn13.up[,c(1:4)])))), unique(as.vector(as.matrix(cl.pn14.up[,c(1:4)])))))
+kable(thirteen, align="l")
+## Who are these genes?
+kable(new_afi_definitive[new_afi_definitive$gene %in% thirteen , c(1,2,3,90:97)], align="l", row.names=F)
+```
+
+Now I retrieve the up-regulated genes as obtained by **Clust** on the 3 years datasets integrated analysis
+
+```{r, include=TRUE, warning=F}
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/")
+pn.up.together <- read.table("Clusters_Objects.tsv", head=T, sep="\t", na.strings="")
+pn.up.together <- pn.up.together[2:nrow(pn.up.together),]
+dim(pn.up.together)
+head(pn.up.together)
+```
+
+Among these clusters the profiles we are interested in are the ones from clusters C3 and C4
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+## I already know that these are 62 =) 
+sixtytwo <- sort(unique(as.vector(as.matrix(pn.up.together[,c(4,6)]))))
+kable(sixtytwo)
+## Who are these genes?
+kable(new_afi_definitive[new_afi_definitive$gene %in% sixtytwo , c(1,2,3,90:97)], align="l")
+```
+
+Now I try to plot these genes as a heatmap before with raw values and then with the values normalized and centered by **Clust**
+<br>
+Example with Pinot 2012. I use the function I wrote to clean RNAseq datasets to clean PN12 raw dataset
+<br>
+
+**Raw FPKM**
+
+```{r, include=TRUE, warning=F, dev="svg"}
+options(knitr.kable.NA = '')
+source("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/clean_RNAseq_datasets_windows.r")
+dim(pn.12)
+pn.12.cleaned <- clean_RNAseq_datasets_windows("PN12_FPKM_table.txt")
+dim(pn.12.cleaned)
+pn.12.cleaned$ID <- rownames(pn.12.cleaned)
+pn.12.cleaned.log <- log2(pn.12.cleaned[,1:10])
+pn.12.cleaned.log$ID <- rownames(pn.12.cleaned.log)
+## raw raw values
+kable(head(pn.12.cleaned[rownames(pn.12.cleaned) %in% thirteen , -11 ]),align="l")
+ggplot(melt(pn.12.cleaned[rownames(pn.12.cleaned) %in% thirteen , ], id.vars="ID"), aes(x=variable, y=value, group=ID)) + geom_line() + theme_bw() + ggtitle("pn12 thirteen raw FPKM")
+heatmap.2(as.matrix(pn.12.cleaned[rownames(pn.12.cleaned) %in% thirteen , c(1:10) ]), Colv=F, trace="none",margins = c(8, 16))
+kable(head(pn.12.cleaned[rownames(pn.12.cleaned) %in% sixtytwo, ]),align="l")
+ggplot(melt(pn.12.cleaned[rownames(pn.12.cleaned) %in% sixtytwo, ], id.vars="ID"), aes(x=variable, y=value, group=ID)) + geom_line() + theme_bw() + ggtitle("pn12 sixtytwo raw FPKM")
+heatmap.2(as.matrix(pn.12.cleaned[rownames(pn.12.cleaned) %in% sixtytwo , c(1:10) ]), Colv=F, trace="none",margins = c(8, 16), cexRow=0.4)
+## log2 version
+kable(head(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% thirteen , ]),align="l")
+ggplot(melt(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% thirteen , ], id.vars="ID"), aes(x=variable, y=value, group=ID)) + geom_line() + theme_bw() + ggtitle("pn12 thirteen log2 FPKM")
+heatmap.2(as.matrix(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% thirteen , c(1:10) ]), Colv=F, trace="none",margins = c(8, 16))
+kable(head(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% sixtytwo, ]),align="l")
+ggplot(melt(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% sixtytwo, ], id.vars="ID"), aes(x=variable, y=value, group=ID)) + geom_line() + theme_bw() + ggtitle("pn12 sixtytwo log2 FPKM")
+is.na(pn.12.cleaned.log) <- sapply(pn.12.cleaned.log, is.infinite)
+heatmap.2(as.matrix(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% sixtytwo, c(1:10) ]), Colv=F, trace="none",margins = c(8, 16), cexRow=0.4)
+```
+
+**Data transformed by Clust**
+
+```{r, include=TRUE, warning=F, dev="svg"}
+options(knitr.kable.NA = '')
+## load data processed by Clust from single dataframe analysis
+pn.12.processed.single <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/Before-correction/Results_28_Nov_17/Results_28_Nov_17_PN-2012/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
+dim(pn.12.processed.single)
+kable(head(pn.12.processed.single[pn.12.processed.single$Genes %in% thirteen, ]),align="l")
+ggplot(melt(pn.12.processed.single[pn.12.processed.single$Genes %in% thirteen, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 thirteen by clust single datasets")
+rownames(pn.12.processed.single) <- pn.12.processed.single$Genes
+heatmap.2(as.matrix(pn.12.processed.single[rownames(pn.12.processed.single) %in% thirteen, -1]), Colv=F, trace="none",margins = c(8, 16))
+## load data processed by Clust from multiple dataframe analysis
+pn.12.processed.together <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
+kable(head(pn.12.processed.together[pn.12.processed.together$Genes %in% sixtytwo, ]),align="l")
+ggplot(melt(pn.12.processed.together[pn.12.processed.together$Genes %in% sixtytwo, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 sixtytwo by clust all 3 years")
+rownames(pn.12.processed.together) <- pn.12.processed.together$Genes
+heatmap.2(as.matrix(pn.12.processed.together[rownames(pn.12.processed.together) %in% sixtytwo, -1 ]), Colv=F, trace="none",margins = c(8, 16), cexRow=0.4)
+```
+
+**We decided to focus our analysis on the clusters produced by the analysis of all the 3 Pinot datasets together, that is the 62 up and 577 down regulated genes obtained by running Clust with all the 3 ds together**
+<br>
+Now I retrieve the down-regulated genes as obtained by **Clust** on the 3 years datasets integrated analysis
+
+```{r, include=TRUE, warning=F}
+## this file is the same as pn.up.together but I load it again anyway
+setwd("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/")
+pn.down.together <- read.table("Clusters_Objects.tsv", head=T, sep="\t", na.strings="")
+pn.down.together <- pn.down.together[2:nrow(pn.down.together),]
+dim(pn.down.together)
+```
+
+Among these clusters the profiles we are interested in are the ones from clusters C7 and C8
+
+```{r, include=TRUE, warning=F}
+options(knitr.kable.NA = '')
+## I already know that these are 577 =) 
+five77 <- sort(unique(as.vector(as.matrix(pn.down.together[,c(8,9)]))))
+kable(head(five77),align="l")
+## Who are these genes?
+kable(head(new_afi_definitive[new_afi_definitive$gene %in% five77 , c(1,2,3,90:97)]), align="l")
+```
+
+Plot of data processed by Clust from multiple dataframe analysis
+
+```{r, include=TRUE, warning=F, dev="svg"}
+pn.12.processed.together <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
+ggplot(melt(pn.12.processed.together[pn.12.processed.together$Genes %in% five77, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 five77 by clust all 3 years")
+rownames(pn.12.processed.together) <- pn.12.processed.together$Genes
+heatmap.2(as.matrix(pn.12.processed.together[rownames(pn.12.processed.together) %in% five77, -1 ]), Colv=F, trace="none",margins = c(8, 16), cexRow=0.3)
+```
+
+## Gene Ontology of genes in clusters
+
+Gene Ontology from BiomaRt
+
+```{r, include=TRUE, warning=F, dev="svg"}
+options(knitr.kable.NA = '')
+plant<-useMart("plants_mart",dataset="vvinifera_eg_gene", host="plants.ensembl.org")
+attributes <- listAttributes(plant)
+go_attributes <- attributes[27:33,1]
+kable(go_attributes, align="l")
+sixtytwo.go <- getBM(attributes=c('ensembl_gene_id','chromosome_name', go_attributes),filters ='ensembl_gene_id', values = sixtytwo, mart = plant)
+DT::datatable(sixtytwo.go, rownames = F, filter = "top")
+ggplot(sixtytwo.go, aes(fct_infreq(go_id))) + geom_bar() +  theme(axis.text.x=element_text(angle=90,hjust=1))
+#ggplot(c1, aes(fct_infreq(goslim_goa_accession))) + geom_bar()
+#c1[grepl("GO:0016020",c1$go_id),]
+```
+
+
 
 
 
