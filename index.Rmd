@@ -18,8 +18,9 @@ library(gplots)
 library(biomaRt)
 library(forcats)
 library(GOstats)
-library(GOstatsPlus)
 library(GSEABase)
+library(devtools)
+library(GOstatsPlus)
 ```
 
 ## How I created the new Annotation Families Integrated (AFI) table
