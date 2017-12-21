@@ -17,6 +17,9 @@ library(readxl)
 library(gplots)
 library(biomaRt)
 library(forcats)
+library(GOstats)
+library(GOstatsPlus)
+library(GSEABase)
 ```
 
 ## How I created the new Annotation Families Integrated (AFI) table
@@ -318,7 +321,7 @@ options(knitr.kable.NA = '')
 sixtytwo <- sort(unique(as.vector(as.matrix(pn.up.together[,c(4,6)]))))
 kable(sixtytwo)
 ## Who are these genes?
-kable(new_afi_definitive[new_afi_definitive$gene %in% sixtytwo , c(1,2,3,90:97)], align="l")
+DT::datatable(new_afi_definitive[new_afi_definitive$gene %in% sixtytwo , c(1,2,3,90:97)], rownames = F, filter = "top")
 ```
 
 Now I try to plot these genes as a heatmap before with raw values and then with the values normalized and centered by **Clust**
@@ -328,7 +331,7 @@ Example with Pinot 2012. I use the function I wrote to clean RNAseq datasets to 
 
 **Raw FPKM**
 
-```{r, include=TRUE, warning=F, dev="svg"}
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12, fig.height=9}
 options(knitr.kable.NA = '')
 source("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/clean_RNAseq_datasets_windows.r")
 dim(pn.12)
@@ -356,18 +359,18 @@ heatmap.2(as.matrix(pn.12.cleaned.log[rownames(pn.12.cleaned.log) %in% sixtytwo,
 
 **Data transformed by Clust**
 
-```{r, include=TRUE, warning=F, dev="svg"}
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12, fig.height=9}
 options(knitr.kable.NA = '')
 ## load data processed by Clust from single dataframe analysis
 pn.12.processed.single <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/Before-correction/Results_28_Nov_17/Results_28_Nov_17_PN-2012/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
 dim(pn.12.processed.single)
-kable(head(pn.12.processed.single[pn.12.processed.single$Genes %in% thirteen, ]),align="l")
+kable(head(pn.12.processed.single[pn.12.processed.single$Genes %in% thirteen, ]),align="l", row.names=F)
 ggplot(melt(pn.12.processed.single[pn.12.processed.single$Genes %in% thirteen, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 thirteen by clust single datasets")
 rownames(pn.12.processed.single) <- pn.12.processed.single$Genes
 heatmap.2(as.matrix(pn.12.processed.single[rownames(pn.12.processed.single) %in% thirteen, -1]), Colv=F, trace="none",margins = c(8, 16))
 ## load data processed by Clust from multiple dataframe analysis
 pn.12.processed.together <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
-kable(head(pn.12.processed.together[pn.12.processed.together$Genes %in% sixtytwo, ]),align="l")
+kable(head(pn.12.processed.together[pn.12.processed.together$Genes %in% sixtytwo, ]),align="l", row.names=F)
 ggplot(melt(pn.12.processed.together[pn.12.processed.together$Genes %in% sixtytwo, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 sixtytwo by clust all 3 years")
 rownames(pn.12.processed.together) <- pn.12.processed.together$Genes
 heatmap.2(as.matrix(pn.12.processed.together[rownames(pn.12.processed.together) %in% sixtytwo, -1 ]), Colv=F, trace="none",margins = c(8, 16), cexRow=0.4)
@@ -393,12 +396,12 @@ options(knitr.kable.NA = '')
 five77 <- sort(unique(as.vector(as.matrix(pn.down.together[,c(8,9)]))))
 kable(head(five77),align="l")
 ## Who are these genes?
-kable(head(new_afi_definitive[new_afi_definitive$gene %in% five77 , c(1,2,3,90:97)]), align="l")
+DT::datatable(new_afi_definitive[new_afi_definitive$gene %in% five77 , c(1,2,3,90:97)], rownames = F, filter = "top")
 ```
 
 Plot of data processed by Clust from multiple dataframe analysis
 
-```{r, include=TRUE, warning=F, dev="svg"}
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12, fig.height=9}
 pn.12.processed.together <- read.table("X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/dataset_trascrittomica/nuovi_dataset/cluster_analysis-heatmap/clust/Results/After-correction/Results_06_Dec_17/Results_06_Dec_17_pn/Processed_Data/pn_2012.txt_processed.tsv", head=T, sep="\t", na.strings="")
 ggplot(melt(pn.12.processed.together[pn.12.processed.together$Genes %in% five77, ], id.vars="Genes"), aes(x=variable, y=value, group=Genes)) + geom_line() + theme_bw() + ggtitle("pn12 five77 by clust all 3 years")
 rownames(pn.12.processed.together) <- pn.12.processed.together$Genes
@@ -407,9 +410,11 @@ heatmap.2(as.matrix(pn.12.processed.together[rownames(pn.12.processed.together) 
 
 ## Gene Ontology of genes in clusters
 
-Gene Ontology from BiomaRt
+**Gene Ontology from BiomaRt**
+<br>
+Before the up-regulated (62)
 
-```{r, include=TRUE, warning=F, dev="svg"}
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12, fig.height=9}
 options(knitr.kable.NA = '')
 plant<-useMart("plants_mart",dataset="vvinifera_eg_gene", host="plants.ensembl.org")
 attributes <- listAttributes(plant)
@@ -417,12 +422,45 @@ go_attributes <- attributes[27:33,1]
 kable(go_attributes, align="l")
 sixtytwo.go <- getBM(attributes=c('ensembl_gene_id','chromosome_name', go_attributes),filters ='ensembl_gene_id', values = sixtytwo, mart = plant)
 DT::datatable(sixtytwo.go, rownames = F, filter = "top")
-ggplot(sixtytwo.go, aes(fct_infreq(go_id))) + geom_bar() +  theme(axis.text.x=element_text(angle=90,hjust=1))
-#ggplot(c1, aes(fct_infreq(goslim_goa_accession))) + geom_bar()
-#c1[grepl("GO:0016020",c1$go_id),]
+ggplot(sixtytwo.go, aes(fct_infreq(goslim_goa_description))) + geom_bar() +  theme(axis.text.x=element_text(angle=90,hjust=1)) + ggtitle("GO Slim Frequency")
 ```
 
+Now the gene ontologies on the down-regulated
 
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12, fig.height=9}
+five77.go <- getBM(attributes=c('ensembl_gene_id','chromosome_name', go_attributes),filters ='ensembl_gene_id', values = five77, mart = plant)
+DT::datatable(five77.go, rownames = F, filter = "top")
+ggplot(five77.go, aes(fct_infreq(goslim_goa_description))) + geom_bar() +  theme(axis.text.x=element_text(angle=90,hjust=1)) + ggtitle("GO Slim Frequency")
+```
 
+**Custom gene ontologies enrichment from https://github.com/davfre/GOstatsPlus **
+
+```{r, engine = 'bash', eval = FALSE}
+## annotation V2 to make it look like V1 ##
+wget http://genomes.cribi.unipd.it/DATA/V2/annotation/bl2go.annot_with_GO_description.txt
+sed -i 's/VIT_2/VIT_/g' bl2go.annot_with_GO_description.txt
+sed -i 's/\.[0-9]//g' bl2go.annot_with_GO_description.txt
+```
+
+Now the commands for preparing the file for the custom gene ontologies enrichment and the real test
+
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12}
+## prepare the file from the bl2go downloaded from CRIBI
+GO_v2 <- b2g_to_gsc(file = "X:/BIOINFORMATICS/Dropbox/PETER/METAQTL/QTLDB/analisi_mqtl/analisi_mqtl_070317/gene_ontology/bl2go.annot_with_GO_description.txt", organism = "vvinifera")
+sixtytwo.GO.BP <- test_GO(as.character(unique(sixtytwo)) , ontology = "BP", gsc=GO_v2, pval = 0.05)
+sixtytwo.GO.MF <- test_GO(as.character(unique(sixtytwo)) , ontology = "MF", gsc=GO_v2, pval = 0.05)
+DT::datatable(summary(sixtytwo.GO.BP),rownames = F, filter = "top")
+DT::datatable(summary(sixtytwo.GO.MF),rownames = F, filter = "top")
+# go_terms <- unlist(lapply(c(sixtytwo.GO.MF),function(d){significant_terms(d, cutoff = 0.05)}))
+```
+
+Now the down-regulated genes
+
+```{r, include=TRUE, warning=F, dev="svg", fig.width=12}
+five77.GO.BP <- test_GO(as.character(unique(five77)) , ontology = "BP", gsc=GO_v2, pval = 0.05)
+five77.GO.MF <- test_GO(as.character(unique(five77)) , ontology = "MF", gsc=GO_v2, pval = 0.05)
+DT::datatable(summary(five77.GO.BP),rownames = F, filter = "top")
+DT::datatable(summary(five77.GO.MF),rownames = F, filter = "top")
+```
 
 
